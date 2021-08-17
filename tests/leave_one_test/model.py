@@ -1,27 +1,28 @@
 import torch
 import numpy as np
+from torch import nn
 
 from ops import log_clip
 
 class LogisticRegression(torch.nn.Module):
     def __init__(self, weight_decay):
-        super(LogisticRegression, self).__init__()
+        super().__init__()
 
         self.wd = torch.FloatTensor([weight_decay]).cuda()
-        self.w = torch.nn.Parameter(torch.zeros([784], requires_grad=True))
+        self.linear = nn.Linear(784, 1)
 
     def forward(self, x):
-        logits = torch.matmul(x, torch.reshape(self.w, [-1, 1]))
+        x = self.linear(x)
 
-        return logits
+        return x
 
     def loss(self, logits, y, train=True):
         preds = torch.sigmoid(logits)
 
         if train:
-            loss = -torch.mean(y * torch.log(preds) + (1 - y) * torch.log(1 - preds)) + torch.sum(self.w*self.w) * self.wd / 2
+            loss = -torch.mean(y * torch.log(preds) + (1 - y) * torch.log(1 - preds)) + torch.sum(self.linear.weight*self.linear.weight) * self.wd / 2
         else:
-            loss = -torch.mean(y * torch.log(preds) + (1 - y) * torch.log(1 - preds)) + torch.sum(self.w*self.w) * self.wd / 2
+            loss = -torch.mean(y * torch.log(preds) + (1 - y) * torch.log(1 - preds)) + torch.sum(self.linear.weight*self.linear.weight) * self.wd / 2
 
         return loss
 

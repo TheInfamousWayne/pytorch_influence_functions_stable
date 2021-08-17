@@ -6,6 +6,7 @@ from torch.autograd import grad
 from torch.autograd.functional import vhp
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import pytorch_influence_functions.influence_functions.autograd_hacks as agh
 
 from pytorch_influence_functions.influence_functions.utils import (
     conjugate_gradient,
@@ -174,19 +175,36 @@ def grad_z(x, y, model, gpu=-1, loss_func="cross_entropy"):
 
     Returns:
         grad_z: list of torch tensor, containing the gradients
-            from model parameters to loss"""
+            from model parameters to loss. Has leading batch dimension
+            if a batch is provided; if batchsize is 1, dimension is dropped."""
     model.eval()
 
     # initialize
     if gpu >= 0:
         x, y = x.cuda(), y.cuda()
 
+    # Add hooks to capture gradients
+    agh.clear_backprops(model)
+    if "autograd_hacks_hooks" in model.__dict__.keys():
+        agh.enable_hooks()
+    else:
+        agh.add_hooks(model)
+
+    # Evaluate model and generate gradients
     prediction = model(x)
-
     loss = calc_loss(prediction, y, loss_func=loss_func)
+    loss.backward(retain_graph=True)
 
-    # Compute sum of gradients from model parameters to loss
-    return grad(loss, model.parameters())
+    # Catch hooked gradients
+    agh.compute_grad1(model)
+    agh.disable_hooks()
+    fullNet = [layer for layer in model.modules()][0]
+    grads = [param.grad1 for param in fullNet.parameters()]
+
+    # For compatibility with rest of code, drop batch dimension if only one instance
+    grads = [torch.squeeze(t, 0) for t in grads]
+
+    return grads
 
 
 def s_test_sample(

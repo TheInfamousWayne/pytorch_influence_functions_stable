@@ -77,8 +77,8 @@ class TestLeaveOneOut(TestCase):
         # assign W into pytorch model
         w_opt = sklearn_model.coef_.ravel()
         with torch.no_grad():
-            torch_model.w = torch.nn.Parameter(
-                torch.tensor(w_opt, dtype=torch.float)
+            torch_model.linear.weight = torch.nn.Parameter(
+                torch.tensor(w_opt, dtype=torch.float).unsqueeze(dim=0)
             )
         
         # calculate original loss
@@ -123,8 +123,8 @@ class TestLeaveOneOut(TestCase):
             # assign w on tensorflow model
             w_retrain = sklearn_model_minus_one.coef_.T.ravel()
             with torch.no_grad():
-                torch_model.w = torch.nn.Parameter(
-                    torch.tensor(w_retrain, dtype=torch.float)
+                torch_model.linear.weight = torch.nn.Parameter(
+                    torch.tensor(w_retrain, dtype=torch.float).unsqueeze(dim=0)
                 )
             
             if gpus >= 0:

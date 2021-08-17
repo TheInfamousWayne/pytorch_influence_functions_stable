@@ -144,6 +144,7 @@ def get_default_config():
         "damp": None,
         "calc_method": "img_wise",
         "log_filename": None,
+        "batchsize": 128
     }
 
     return config

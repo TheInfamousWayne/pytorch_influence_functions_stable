@@ -6,7 +6,6 @@ import datetime
 import numpy as np
 import copy
 import logging
-from tqdm import tqdm
 
 from pathlib import Path
 
@@ -106,6 +105,8 @@ def calc_grad_z(model, train_loader, save_pth=False, gpu=-1, start=0):
         save_pth = Path(save_pth)
     if not save_pth:
         logging.info("ATTENTION: Not saving grad_z files!")
+
+    # TODO: Parallelize (currently only grad_z() is parallelized)
 
     grad_zs = []
     for i in range(start, len(train_loader.dataset)):
@@ -273,8 +274,8 @@ def calc_influence_single(
     scale=25,
     s_test_vec=None,
     time_logging=False,
-    loss_func="cross_entropy",
-    single=False):
+    loss_func="cross_entropy"
+    ):
     """Calculates the influences of all training data points on a single
     test dataset image.
 
@@ -322,11 +323,7 @@ def calc_influence_single(
     # Calculate the influence function
     train_dataset_size = len(train_loader.dataset)
     influences = []
-    for i in tqdm(range(train_dataset_size)):
-        z, t = train_loader.dataset[i]
-        z = train_loader.collate_fn([z])
-        t = train_loader.collate_fn([t])
-
+    for i, (z, t) in enumerate(train_loader):
         if time_logging:
             time_a = datetime.datetime.now()
 
@@ -342,22 +339,14 @@ def calc_influence_single(
             tmp_influence = (
                 sum(
                     [
-                        ####################
-                        # TODO: potential bottle neck, takes 17% execution time
-                        # torch.sum(k * j).data.cpu().numpy()
-                        ####################
-                        torch.sum(k * j).data
+                        torch.sum(k * j, dim = [i for i in range(1, len(k.shape))]).data
                         for k, j in zip(grad_z_vec, s_test_vec)
                     ]
                 )
                 / train_dataset_size
             )
 
-        if single:
-            assert train_dataset_size == 1, 'Error: train size is {}, but single is enabled'.format(train_dataset_size)
-            return tmp_influence.cpu().item()
-
-        influences.append(tmp_influence.cpu())
+        influences.extend(tmp_influence.cpu())
 
     harmful = np.argsort(influences)
     helpful = harmful[::-1]
