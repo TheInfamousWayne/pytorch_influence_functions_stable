@@ -37,6 +37,7 @@ SAMPLE_NUM = 50 * 2
 RECURSION_DEPTH = 5000
 R = 10
 SCALE = 25
+DAMP = 0.01
 
 class TestLeaveOneOut(TestCase):
     def test_leave_one_out(self):
@@ -61,7 +62,7 @@ class TestLeaveOneOut(TestCase):
                 return out_data, out_label
         
         train_data = CreateData(x_train, y_train)
-        train_loader = torch.utils.data.DataLoader(train_data, batch_size=1, shuffle=False)
+        train_loader = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=False)
 
         # prepare sklearn model to train w
         C = 1.0 / (train_sample_num * WEIGHT_DECAY)
@@ -98,12 +99,16 @@ class TestLeaveOneOut(TestCase):
 
         # Predict how high the loss diff on x_test should be
         loss_diff_approx, _, _, _, = calc_influence_single(torch_model, train_loader, test_loader, test_id_num=0, gpu=1,
-                                    recursion_depth=RECURSION_DEPTH, r=R, damp=0, scale=SCALE)
+                                    recursion_depth=RECURSION_DEPTH, r=R, damp=DAMP, scale=SCALE)
         loss_diff_approx = torch.FloatTensor(loss_diff_approx).cpu().numpy()
+
+        print(loss_diff_approx)
+        return loss_diff_approx
 
         # get high and low loss diff indices
         sorted_indice = np.argsort(loss_diff_approx)
         sample_indice = np.concatenate([sorted_indice[-int(SAMPLE_NUM/2):], sorted_indice[:int(SAMPLE_NUM/2)]])
+        sample_indice = range(SAMPLE_NUM)
 
         # calculate true loss diff
         loss_diff_true = np.zeros(SAMPLE_NUM)
@@ -143,7 +148,11 @@ class TestLeaveOneOut(TestCase):
 
         r2_score = visualize_result(loss_diff_true, loss_diff_approx[sample_indice])
 
+        print('r2 score: {}'.format(r2_score))
+        print(loss_diff_true)
         self.assertTrue(r2_score > 0.9)
+
+
 
 
 if __name__ == "__main__":

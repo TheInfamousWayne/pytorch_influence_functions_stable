@@ -192,7 +192,7 @@ def grad_z(x, y, model, gpu=-1, loss_func="cross_entropy"):
 
     # Evaluate model and generate gradients
     prediction = model(x)
-    loss = calc_loss(prediction, y, loss_func=loss_func)
+    loss = model.loss(prediction, y)
     loss.backward(retain_graph=True)
 
     # Catch hooked gradients
@@ -249,9 +249,9 @@ def s_test_sample(
         hessian_loader = DataLoader(
             train_loader.dataset,
             sampler=torch.utils.data.RandomSampler(
-                train_loader.dataset, True, num_samples=recursion_depth
+                train_loader.dataset, True, num_samples=recursion_depth*train_loader.batch_size
             ),
-            batch_size=1,
+            batch_size=train_loader.batch_size,
             num_workers=4,
         )
 

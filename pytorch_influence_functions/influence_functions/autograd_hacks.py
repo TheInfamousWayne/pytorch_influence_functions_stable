@@ -53,7 +53,7 @@ def add_hooks(model: nn.Module) -> None:
     for layer in model.modules():
         if _layer_type(layer) in _supported_layers:
             handles.append(layer.register_forward_hook(_capture_activations))
-            handles.append(layer.register_backward_hook(_capture_backprops))
+            handles.append(layer.register_full_backward_hook(_capture_backprops))
 
     model.__dict__.setdefault('autograd_hacks_hooks', []).extend(handles)
 
