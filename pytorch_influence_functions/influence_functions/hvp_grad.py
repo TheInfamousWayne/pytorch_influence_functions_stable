@@ -101,8 +101,15 @@ def s_test(x_test, y_test, model, i, samples_loader, gpu=-1, damp=0.01, scale=25
     h_estimate = v
 
     params, names = make_functional(model)
-    # Make params regular Tensors instead of nn.Parameter
-    params = tuple(p.detach().requires_grad_() for p in params)
+    req_grad = [p.requires_grad for p in params]
+    # Make params regular Tensors instead of nn.Parameter and do not lose gradient information along the way
+    params = tuple(p.detach().requires_grad_() if r else p.detach() for (r, p) in zip(req_grad, params))
+
+    # Only calculate s_test with respect to parameters that require grad:
+    params_grad = tuple(p for (r, p) in zip(req_grad, params) if r)
+    names_grad = [n for (r, n) in zip(req_grad, names) if r]
+    params_nograd = tuple(p for (r, p) in zip(req_grad, params) if not r)
+    names_nograd = [n for (r, n) in zip(req_grad, names) if not r]
 
     # TODO: Dynamically set the recursion depth so that iterations stop once h_estimate stabilises
     progress_bar = tqdm(samples_loader, desc=f"IHVP sample {i}")
@@ -112,12 +119,13 @@ def s_test(x_test, y_test, model, i, samples_loader, gpu=-1, damp=0.01, scale=25
             x_train, y_train = x_train.cuda(), y_train.cuda()
 
         def f(*new_params):
-            load_weights(model, names, new_params)
+            load_weights(model, names_grad, new_params)
+            load_weights(model, names_nograd, params_nograd)
             out = model(x_train)
             loss = model.loss(out, y_train)
             return loss
 
-        hv = vhp(f, params, tuple(h_estimate), strict=True)[1]
+        hv = vhp(f, params_grad, tuple(h_estimate), strict=True)[1]
 
         # Recursively calculate h_estimate
         with torch.no_grad():
@@ -132,6 +140,8 @@ def s_test(x_test, y_test, model, i, samples_loader, gpu=-1, damp=0.01, scale=25
 
     with torch.no_grad():
         load_weights(model, names, params, as_params=True)
+        for (r, p) in zip(req_grad, model.parameters()):
+            p.requires_grad_(r)
 
     return h_estimate
 
@@ -161,7 +171,9 @@ def grad_z(x, y, model, gpu=-1):
     loss = model.loss(prediction, y)
 
     # Compute sum of gradients from model parameters to loss
-    return grad(loss, model.parameters())
+    # for all model parameters that require gradients
+    params = [param for param in model.parameters() if param.requires_grad]
+    return grad(loss, params)
 
 
 def s_test_sample(
@@ -197,7 +209,7 @@ def s_test_sample(
         s_test_vec: torch tensor, contains s_test for a single test image"""
 
     inverse_hvp = [
-        torch.zeros_like(params, dtype=torch.float) for params in model.parameters()
+        torch.zeros_like(params, dtype=torch.float) for params in model.parameters() if params.requires_grad
     ]
 
     for i in range(r):

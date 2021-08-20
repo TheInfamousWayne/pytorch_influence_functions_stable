@@ -14,7 +14,7 @@ from .dummy_dataset import (
 
 
 class LogisticRegression(LightningModule):
-    def __init__(self, n_classes=2, n_features=20, idx_to_remove=None, wd=0.):
+    def __init__(self, n_classes=2, n_features=20, idx_to_remove=None, wd=0., add_useless_layer=False):
         super().__init__()
         self.wd = wd
         self.training_set = DummyDataset(n_classes=n_classes, n_features=n_features)
@@ -34,8 +34,15 @@ class LogisticRegression(LightningModule):
 
         out = 1 if n_classes == 2 else n_classes
         self.linear = nn.Linear(n_features, out)
+        self.add_useless_layer = add_useless_layer
+        if self.add_useless_layer:
+            self.useless_layer = nn.Linear(n_features, out)
+            for p in self.useless_layer.parameters():
+                p.requires_grad_(False)
 
     def forward(self, x: torch.Tensor):
+        if self.add_useless_layer:
+            x2 = self.useless_layer(x)
         x = self.linear(x)
         if self.n_classes == 2:
             return x.view(-1)
