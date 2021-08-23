@@ -34,6 +34,7 @@ TEST_INDEX = 5 # Index of the test image whose influence on we predict
 WEIGHT_DECAY = 0.01
 OUTPUT_DIR = 'result'
 SAMPLE_NUM = 50 * 2
+SYMMETRY_NUM = 10
 RECURSION_DEPTH = 5000
 R = 10
 SCALE = 25
@@ -86,7 +87,7 @@ class TestLeaveOneOut(TestCase):
         y_test_input = torch.LongTensor(y_test[TEST_INDEX: TEST_INDEX+1])
 
         test_data = CreateData(x_test[TEST_INDEX: TEST_INDEX+1], y_test[TEST_INDEX: TEST_INDEX+1])
-        test_loader = torch.utils.data.DataLoader(test_data, batch_size=1, shuffle=True)
+        test_loader = torch.utils.data.DataLoader(test_data, batch_size=1, shuffle=False)
 
         if gpus >= 0:
             torch_model = torch_model.cuda()
@@ -105,6 +106,24 @@ class TestLeaveOneOut(TestCase):
         # get high and low loss diff indices
         sorted_indice = np.argsort(loss_diff_approx)
         sample_indice = np.concatenate([sorted_indice[-int(SAMPLE_NUM/2):], sorted_indice[:int(SAMPLE_NUM/2)]])
+
+        # Predict the same with inverted x_test and train set to test symmetry
+        loss_diff_approx_reverse = np.zeros(SYMMETRY_NUM)
+        sample_subset_ids = np.linspace(0, len(sample_indice) - 1, SYMMETRY_NUM, dtype=int)
+        sample_subset = sample_indice[sample_subset_ids]
+        for (num, id) in enumerate(sample_subset):
+            # Get train samples
+            x_train_input = torch.FloatTensor(x_train[id: id + 1])
+            y_train_input = torch.LongTensor(y_train[id: id + 1])
+            if gpus >= 0:
+                x_train_input = x_train_input.cuda()
+                y_train_input = y_train_input.cuda()
+
+            # Compute diff
+            diff, _, _ = calc_influence_single(torch_model, train_loader, test_loader,
+                                               x_train_input, y_train_input, gpu=1,
+                                               recursion_depth=RECURSION_DEPTH, r=R, damp=0, scale=SCALE)
+            loss_diff_approx_reverse[num] = diff[0].numpy()
 
         # calculate true loss diff
         loss_diff_true = np.zeros(SAMPLE_NUM)
@@ -142,9 +161,12 @@ class TestLeaveOneOut(TestCase):
             print('True loss diff      :{}'.format(loss_diff_true[i]))
             print('Estimated loss diff :{}'.format(loss_diff_approx[index]))
 
-        r2_score = visualize_result(loss_diff_true, loss_diff_approx[sample_indice])
+        r2_score, r2_reverse = visualize_result(loss_diff_true, loss_diff_approx[sample_indice], loss_diff_approx_reverse,
+                                    sample_subset_ids)
 
-        self.assertTrue(r2_score > 0.9)
+        print(r2_score) # 0.998
+        print(r2_reverse) # 0.988
+        self.assertTrue(r2_score > 0.9 and r2_reverse > 0.9)
 
 
 if __name__ == "__main__":

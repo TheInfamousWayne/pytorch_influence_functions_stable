@@ -30,24 +30,28 @@ def get_2class_mnist(num_a, num_b):
     return (x_train_2class, y_train_2class), (x_test_2class, y_test_2class)
 
 
-def visualize_result(actual_loss_diff, estimated_loss_diff):
+def visualize_result(actual_loss_diff, estimated_loss_diff, reverse_loss_diff, reverse_ids):
     r2_s = r2_score(actual_loss_diff, estimated_loss_diff)
+    r2_r = r2_score(actual_loss_diff[reverse_ids], reverse_loss_diff)
+    mae = mean_absolute_error(actual_loss_diff, estimated_loss_diff)
 
-    max_abs = np.max([np.abs(actual_loss_diff), np.abs(estimated_loss_diff)])
+    max_abs = np.max([np.max(np.abs(actual_loss_diff)),
+                      np.max(np.abs(estimated_loss_diff)),
+                      np.max(np.abs(reverse_loss_diff))])
     min_, max_ = -max_abs * 1.1, max_abs * 1.1
     plt.rcParams['figure.figsize'] = 6, 5
     plt.scatter(actual_loss_diff, estimated_loss_diff, zorder=2, s=10)
+    plt.scatter(actual_loss_diff[reverse_ids], reverse_loss_diff, zorder=2, s=10, c="#ff7f0e")
     plt.title('Loss diff')
     plt.xlabel('Actual loss diff')
     plt.ylabel('Estimated loss diff')
     range_ = [min_, max_]
     plt.plot(range_, range_, 'k-', alpha=0.2, zorder=1)
-    text = 'MAE = {:.03}\nR2 score = {:.03}'.format(mean_absolute_error(actual_loss_diff, estimated_loss_diff),
-                                                    r2_s)
+    text = 'MAE = {:.03}\nR2 score = {:.03}\nR2 reverse = {:.03}'.format(mae, r2_s, r2_r)
     plt.text(max_abs, -max_abs, text, verticalalignment='bottom', horizontalalignment='right')
     plt.xlim(min_, max_)
     plt.ylim(min_, max_)
 
     plt.savefig("result.png")
 
-    return r2_s
+    return r2_s, r2_r
