@@ -20,7 +20,7 @@ def _add_hook(model, layer):
 
     Returns: None
     """
-    module = getattr(model, layer)
+    module = dict(model.named_modules())[layer]
     hook = module.register_forward_hook(_get_output)
 
     model.__dict__.setdefault("embed_hook", []).extend([hook])
@@ -33,7 +33,7 @@ def _remove_hooks(model):
 
 
 def _read_hook(model, layer):
-    module = getattr(model, layer)
+    module = dict(model.named_modules())[layer]
     embed = getattr(module, "embeds").detach().cpu()
     embed = embed.reshape(embed.shape[0], -1)
     return embed
