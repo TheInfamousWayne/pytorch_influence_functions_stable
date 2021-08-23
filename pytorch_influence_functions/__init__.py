@@ -11,3 +11,6 @@ from .influence_functions.utils import (
     display_progress,
     get_default_config
 )
+from .influence_functions.embeddings import(
+    get_embeds
+)
