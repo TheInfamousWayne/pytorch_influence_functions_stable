@@ -21,16 +21,16 @@ from .utils import (
 
 
 def calc_s_test(
-    model,
-    test_loader,
-    train_loader,
-    save=False,
-    gpu=-1,
-    damp=0.01,
-    scale=25,
-    recursion_depth=5000,
-    r=1,
-    start=0,
+        model,
+        test_loader,
+        train_loader,
+        save=False,
+        gpu=-1,
+        damp=0.01,
+        scale=25,
+        recursion_depth=5000,
+        r=1,
+        start=0,
 ):
     """Calculates s_test for the whole test dataset taking into account all
     training data images.
@@ -124,7 +124,7 @@ def calc_grad_z(model, train_loader, save_pth=False, gpu=-1, start=0):
 
 
 def load_s_test(
-    s_test_dir=Path("./s_test/"), s_test_id=0, r_sample_size=10, train_dataset_size=-1
+        s_test_dir=Path("./s_test/"), s_test_id=0, r_sample_size=10, train_dataset_size=-1
 ):
     """Loads all s_test data required to calculate the influence function
     and returns a list of it.
@@ -148,7 +148,7 @@ def load_s_test(
 
     s_test = []
     logging.info(f"Loading s_test from: {s_test_dir} ...")
-    num_s_test_files = len(s_test_dir.glob("*.s_test"))
+    num_s_test_files = len(list(s_test_dir.glob("*.s_test")))
     if num_s_test_files != r_sample_size:
         logging.warning(
             "Load Influence Data: number of s_test sample files"
@@ -158,7 +158,7 @@ def load_s_test(
     # TODO: should prob. not hardcode the file name, use natsort+glob
     ########################
     for i in range(num_s_test_files):
-        s_test.append(torch.load(s_test_dir / str(s_test_id) + f"_{i}.s_test"))
+        s_test.append(torch.load(s_test_dir / (str(s_test_id) + f"_{i}.s_test")))
         display_progress("s_test files loaded: ", i, r_sample_size)
 
     #########################
@@ -195,7 +195,7 @@ def load_grad_z(grad_z_dir=Path("./grad_z/"), train_dataset_size=-1):
 
     grad_z_vecs = []
     logging.info(f"Loading grad_z from: {grad_z_dir} ...")
-    available_grad_z_files = len(grad_z_dir.glob("*.grad_z"))
+    available_grad_z_files = len(list(grad_z_dir.glob("*.grad_z")))
     if available_grad_z_files != train_dataset_size:
         logging.warn(
             "Load Influence Data: number of grad_z files mismatches" " the dataset size"
@@ -203,13 +203,13 @@ def load_grad_z(grad_z_dir=Path("./grad_z/"), train_dataset_size=-1):
         if -1 == train_dataset_size:
             train_dataset_size = available_grad_z_files
     for i in range(train_dataset_size):
-        grad_z_vecs.append(torch.load(grad_z_dir / str(i) + ".grad_z"))
+        grad_z_vecs.append(torch.load(grad_z_dir / (str(i) + ".grad_z")))
         display_progress("grad_z files loaded: ", i, train_dataset_size)
 
     return grad_z_vecs
 
 
-def calc_influence_function(train_dataset_size, grad_z_vecs=None, e_s_test=None):
+def calc_influence_function(train_dataset_size, grad_z_vecs=None, e_s_test=None, grad_z_dir=None, s_test_dir=None):
     """Calculates the influence function
 
     Arguments:
@@ -224,8 +224,8 @@ def calc_influence_function(train_dataset_size, grad_z_vecs=None, e_s_test=None)
         harmful: list of float, influences sorted by harmfulness
         helpful: list of float, influences sorted by helpfulness"""
     if not grad_z_vecs and not e_s_test:
-        grad_z_vecs = load_grad_z()
-        e_s_test, _ = load_s_test(train_dataset_size=train_dataset_size)
+        grad_z_vecs = load_grad_z(grad_z_dir)
+        e_s_test, _ = load_s_test(s_test_dir, train_dataset_size=train_dataset_size)
 
     if len(grad_z_vecs) != train_dataset_size:
         logging.warn(
@@ -236,22 +236,22 @@ def calc_influence_function(train_dataset_size, grad_z_vecs=None, e_s_test=None)
     influences = []
     for i in range(train_dataset_size):
         tmp_influence = (
-            sum(
-                [
-                    ###################################
-                    # TODO: verify if computation really needs to be done
-                    # on the CPU or if GPU would work, too
-                    ###################################
-                    torch.sum(k * j).data.cpu().numpy()
-                    for k, j in zip(grad_z_vecs[i], e_s_test)
-                    ###################################
-                    # Originally with [i] because each grad_z contained
-                    # a list of tensors as long as e_s_test list
-                    # There is one grad_z per training data sample
-                    ###################################
-                ]
-            )
-            / train_dataset_size
+                sum(
+                    [
+                        ###################################
+                        # TODO: verify if computation really needs to be done
+                        # on the CPU or if GPU would work, too
+                        ###################################
+                        torch.sum(k * j).data.cpu().numpy()
+                        for k, j in zip(grad_z_vecs[i], e_s_test)
+                        ###################################
+                        # Originally with [i] because each grad_z contained
+                        # a list of tensors as long as e_s_test list
+                        # There is one grad_z per training data sample
+                        ###################################
+                    ]
+                )
+                / train_dataset_size
         )
         influences.append(tmp_influence.cpu())
         # display_progress("Calc. influence function: ", i, train_dataset_size)
@@ -261,20 +261,23 @@ def calc_influence_function(train_dataset_size, grad_z_vecs=None, e_s_test=None)
 
     return influences, harmful.tolist(), helpful.tolist()
 
+
 def calc_influence_single(
-    model,
-    train_loader,
-    target_loader,
-    x_infl,
-    y_infl,
-    gpu,
-    recursion_depth,
-    r,
-    damp=0.01,
-    scale=25,
-    s_test_vec=None,
-    time_logging=False,
-    single=False):
+        model,
+        train_loader,
+        target_loader,
+        x_infl,
+        y_infl,
+        gpu,
+        recursion_depth,
+        r,
+        damp=0.01,
+        scale=25,
+        s_test_vec=None,
+        time_logging=False,
+        single=False,
+        one_train_on_all_test=False,
+):
     """Calculates the influences of (x_infl, y_infl) towards all points in the target_loader
 
     Arugments:
@@ -292,6 +295,8 @@ def calc_influence_single(
             training dataset size.
         s_test_vec: list of torch tensor, contains s_test vectors. If left
             empty it will also be calculated
+        one_train_on_all_test: the influence of 1 training sample on all test samples (True)
+            or influence of all training samples on 1 test sample (False)
 
     Returns:
         influence: list of float, influences of all training data samples
@@ -318,10 +323,18 @@ def calc_influence_single(
     train_dataset_size = len(train_loader.dataset)
     target_dataset_size = len(target_loader.dataset)
     influences = []
-    for i in tqdm(range(target_dataset_size)):
-        x, y = target_loader.dataset[i]
-        x = target_loader.collate_fn([x])
-        y = target_loader.collate_fn([y])
+
+    if one_train_on_all_test:
+        loader = target_loader
+        dataset_size = target_dataset_size
+    else:
+        loader = train_loader
+        dataset_size = train_dataset_size
+
+    for i in tqdm(range(dataset_size)):
+        x, y = loader.dataset[i]
+        x = loader.collate_fn([x])
+        y = loader.collate_fn([y])
 
         if time_logging:
             time_a = datetime.datetime.now()
@@ -336,17 +349,17 @@ def calc_influence_single(
             )
         with torch.no_grad():
             tmp_influence = (
-                sum(
-                    [
-                        ####################
-                        # TODO: potential bottle neck, takes 17% execution time
-                        # torch.sum(k * j).data.cpu().numpy()
-                        ####################
-                        torch.sum(k * j).data
-                        for k, j in zip(grad_z_vec, s_test_vec)
-                    ]
-                )
-                / train_dataset_size
+                    -sum(
+                        [
+                            ####################
+                            # TODO: potential bottle neck, takes 17% execution time
+                            # torch.sum(k * j).data.cpu().numpy()
+                            ####################
+                            torch.sum(k * j).data
+                            for k, j in zip(grad_z_vec, s_test_vec)
+                        ]
+                    )
+                    / dataset_size
             )
 
         if single:
@@ -415,7 +428,7 @@ def get_dataset_sample_ids(num_samples, test_loader, num_classes=None, start_ind
         )
         # Append the new list on the same level as the old list
         # Avoids having a list of lists
-        sample_list[len(sample_list) : len(sample_list)] = sample_dict[str(i)]
+        sample_list[len(sample_list): len(sample_list)] = sample_dict[str(i)]
     return sample_dict, sample_list
 
 
@@ -501,7 +514,7 @@ def calc_img_wise(config, model, train_loader, target_loader):
         influences[str(i)]["influence"] = infl
         influences[str(i)]["harmful"] = harmful[:500]
         influences[str(i)]["helpful"] = helpful[:500]
-        
+
         display_progress("Test samples processed: ", j, test_dataset_iter_len)
 
     # Final output
@@ -541,8 +554,12 @@ def calc_all_grad_then_test(config, model, train_loader, test_loader):
         model, train_loader, grad_z_outdir, config["gpu"], config["test_start_index"]
     )
 
+    print("Calculating Influences from saved files...")
     train_dataset_len = len(train_loader.dataset)
-    influences, harmful, helpful = calc_influence_function(train_dataset_len)
+    influences, harmful, helpful = calc_influence_function(train_dataset_len,
+                                                           grad_z_dir=grad_z_outdir,
+                                                           s_test_dir=s_test_outdir,
+                                                           )
 
     influence_results["influences"] = influences
     influence_results["harmful"] = harmful
